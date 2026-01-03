@@ -1,0 +1,6 @@
+# ignore build artifacts
+bin/
+*.o
+
+# ignore hidden source files
+.*.c
