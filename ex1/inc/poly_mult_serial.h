@@ -3,7 +3,9 @@
 
 #include <stddef.h> /* defines size_t */
 
-/* Multiplies two polynomials and returns the result.*/
+/* Multiplies two polynomials and returns the result. 
+ * Allocates memory. 
+ */
 long long *poly_mult_serial(const long long *A, size_t deg_A, const long long *B, size_t deg_B, double *time);
 
 #endif

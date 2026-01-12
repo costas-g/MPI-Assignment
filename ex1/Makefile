@@ -8,7 +8,7 @@ BUILD_DIR = build
 
 # Compilation
 CC 		= mpicc
-CFLAGS 	= -g -Wall -Wextra -I$(INC_DIR) -O2
+CFLAGS 	= -g -Wall -Wextra -I$(INC_DIR) -O3
 # -D_POSIX_C_SOURCE=200809L 
 
 # Commands

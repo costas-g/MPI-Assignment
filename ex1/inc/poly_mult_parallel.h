@@ -3,7 +3,7 @@
 
 #include <stddef.h> /* defines size_t */
 
-/* Multiplies two polynomials in parallel and returns the result.*/
-long long *poly_mult_parallel(const long long *A, size_t deg_A, const long long *B, size_t deg_B, size_t num_threads, double *time);
+/* Multiplies one full polynomial with one partial polynomial and writes the partial result to a full-sized output. */
+void poly_mult_partial(const long long *A_part, size_t deg, const long long *B_full, size_t local_terms, long long *R_part, size_t my_rank);
 
 #endif
