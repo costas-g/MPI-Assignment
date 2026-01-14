@@ -3,7 +3,6 @@
 #include <mpi.h>
 
 #include "matvecs.h"
-#include "util_matvec.h"
 
 void matvecs(const int *A, const int *x, int *res, long long size, int iters){
     long long i, j;
@@ -56,7 +55,7 @@ void matvecs(const int *A, const int *x, int *res, long long size, int iters){
 }
 
 
-void matvecs_parallel(const int *A_local, const int *x, int *res, long long matrix_rows, long long local_rows, int iters, int my_rank, int root_proc) {
+void matvecs_parallel(const int *A_local, const int *x, int *res, long long matrix_rows, long long local_rows, int iters) {
     long long cols = matrix_rows;
     /* Copy input vector to output vector. */
     for (long long i = 0; i < cols; i++) {

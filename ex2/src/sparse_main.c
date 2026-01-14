@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
     int *vec_out_dense_ser_p       = NULL;  /* pointer to the output (result) vector for DENSE serial */
     int *vec_out_dense_par_p       = NULL;  /* pointer to the output (result) vector for DENSE parallel */
     int *vec_out_csr_partial_p     = NULL;  /* pointer to the PARTIAL output (result) vector for CSR parallel */
-    int *vec_out_dense_partial_p   = NULL;  /* pointer to the PARTIAL output (result) vector for DENSE parallel */
+    // int *vec_out_dense_partial_p   = NULL;  /* pointer to the PARTIAL output (result) vector for DENSE parallel */
 
 
     /* =================== Allocate memory for SERIAL =================== */
@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
 
         printf("\nGenerating the square matrix of integers...\n");
         start = MPI_Wtime(); /* start time */
-            gen_sparse_matrix(matrix_in_p, rows, cols, sparsity, 10, 1, &prng_state, &nnz);
+            gen_sparse_matrix(matrix_in_p, rows, cols, sparsity, 10, &prng_state, &nnz);
         finish = MPI_Wtime(); /* finish time */
         /* elapsed time */
         gen_time = finish - start; 
@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
 
     /* ---------- Allocate memory for all for DENSE PARALLEL ---------- */
     vec_out_dense_par_p     = malloc(rows * sizeof(int));
-    vec_out_dense_partial_p = calloc(rows , sizeof(int));
+    // vec_out_dense_partial_p = calloc(rows , sizeof(int));
 
     long long local_rows = rows / comm_sz;
     matrix_in_dense_partial_p = malloc(local_rows * cols * sizeof(int));
@@ -219,7 +219,7 @@ int main(int argc, char* argv[]) {
     // print_matrix(matrix_in_dense_partial_p, local_rows, cols);
 
     start = MPI_Wtime(); /* start time */
-        matvecs_parallel(matrix_in_dense_partial_p, vec_in_p, vec_out_dense_par_p, matrix_size, local_rows, num_mults, my_rank, root_proc);
+        matvecs_parallel(matrix_in_dense_partial_p, vec_in_p, vec_out_dense_par_p, matrix_size, local_rows, num_mults);
     finish = MPI_Wtime(); /* finish time */
     /* elapsed time */
     elapsed_time = finish - start;
