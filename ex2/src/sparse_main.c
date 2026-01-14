@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
     /* ========================================== PARALLEL ========================================== */
     /* ============================================================================================== */
 
-    /* -------------------- This is the SEND DATA required for DENSE matvec -------------------- */
+    /* -------------------- This is the SEND DATA required for CSR matvec -------------------- */
     MPI_Barrier(MPI_COMM_WORLD);
     start_all = MPI_Wtime();
     int root_proc = 0; /* process 0 sends and gathers */
@@ -183,21 +183,21 @@ int main(int argc, char* argv[]) {
     elapsed_time = finish - start_all;
     MPI_Reduce(&elapsed_time, &send_time, 1, MPI_DOUBLE, MPI_MAX, root_proc, MPI_COMM_WORLD);
 
-    // /* ==================== Sparse matrix repeated multiplication PARALLEL ====================== */
-    // if (my_rank == 0) {
-    //     printf("\n================================================");
-    //     vec_out_csr_par_p = malloc(rows * sizeof(int));
-    //     printf("\nSparse matrix repeated multiplication PARALLEL...\n");
-    //     start = MPI_Wtime(); /* start time */
-    //         matvecs_csr_parallel(matrix_csr_p, vec_in_p, vec_out_csr_par_p, num_mults, 1);
-    //     finish = MPI_Wtime(); /* finish time */
-    //     /* elapsed time */
-    //     elapsed_time = finish - start;
-    //     printf("  Sparse matrix %dx mult Parallel time (s): %9.6f\n", num_mults, elapsed_time);
-    //     // print_matrix(mtx_p, rows, cols);
-    //     // print_vector(vec, rows);
-    //     // print_vector(vec_out_csr_par_p, rows);
-    // }
+    /* ==================== Sparse matrix repeated multiplication PARALLEL ====================== */
+    if (my_rank == 0) {
+        printf("\n================================================");
+        vec_out_csr_par_p = malloc(rows * sizeof(int));
+        printf("\nSparse matrix repeated multiplication PARALLEL...\n");
+        start = MPI_Wtime(); /* start time */
+            matvecs_csr_parallel(matrix_csr_p, vec_in_p, vec_out_csr_par_p, num_mults, 1);
+        finish = MPI_Wtime(); /* finish time */
+        /* elapsed time */
+        elapsed_time = finish - start;
+        printf("  Sparse matrix %dx mult Parallel time (s): %9.6f\n", num_mults, elapsed_time);
+        // print_matrix(mtx_p, rows, cols);
+        // print_vector(vec, rows);
+        // print_vector(vec_out_csr_par_p, rows);
+    }
     
     /* ==================== Dense matrix repeated multiplication PARALLEL ====================== */
     if (my_rank == 0) {
@@ -320,11 +320,11 @@ int main(int argc, char* argv[]) {
     /* Free allocated memory */
     // free(matrix_in_pp[0]); // frees the contiguous data block
     // free(matrix_in_pp);
-    free(matrix_in_p);
+    if (my_rank == 0) free(matrix_in_p);
+    if (my_rank == 0) free_csr_matrix(matrix_csr_p);
     free(vec_in_p);
     free(vec_out_csr_ser_p);
     free(vec_out_csr_par_p);
-    free_csr_matrix(matrix_csr_p);
 
     return 0;
 } /* main */
