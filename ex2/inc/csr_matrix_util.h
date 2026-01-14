@@ -19,6 +19,9 @@ typedef struct csr_matrix csr_matrix_t;
 /* Initializes the fields of the csr_matrix object pointed to by the input pointer. Value fields are set to 0, and pointer fields to NULL. */
 int init_csr_matrix(csr_matrix_t* csr_matrix);
 
+/* Sets the fields of the csr_matrix object pointed to by the input pointer to the values and pointers passed. */
+int set_csr_matrix(csr_matrix_t *csr_matrix_p, long long rows, int* values, long long* col_index, long long* row_ptr);
+
 /* Buils the CSR sparse matrix representation of the input matrix. NNZ required. */
 int build_csr_matrix(const int *input_mtx, csr_matrix_t *output_mtx_csr, long long rows, long long cols, long long nnz);
 

@@ -15,6 +15,7 @@ static long long vectors_diffs(const int* vec_a, const int* vec_b, long long siz
     return num_errors;
 }
 
+#ifdef DEBUG
 static void print_matrix(const int *mtx, long long rows, long long cols) {
     if (!mtx) {
         printf("[ERROR]: matrix input is NULL\n");
@@ -42,5 +43,19 @@ static void print_vector(const int *vec, long long size) {
     }
     puts("");
 }
+
+static void print_ll_vector(const long long *vec, long long size) {
+    if (!vec) {
+        printf("[ERROR]: vector input is NULL\n");
+        return;
+    }
+
+    long long i;
+    for (i = 0; i < size; i++) {
+        printf("%lld, ", vec[i]);
+    }
+    puts("");
+}
+#endif
 
 #endif

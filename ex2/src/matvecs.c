@@ -55,11 +55,12 @@ void matvecs(const int *A, const int *x, int *res, long long size, int iters){
 }
 
 
-void matvecs_parallel(const int *A_local, const int *x, int *res, long long matrix_rows, long long local_rows, int iters) {
+void matvecs_parallel(const int *A_local, const int *x_full, int *res_full, long long matrix_rows, long long local_rows, int iters) {
+    long long rows = matrix_rows;
     long long cols = matrix_rows;
     /* Copy input vector to output vector. */
-    for (long long i = 0; i < cols; i++) {
-        res[i] = x[i];
+    for (long long i = 0; i < rows; i++) {
+        res_full[i] = x_full[i];
     }
     if (iters < 1) return; /* if iterations are 0, quick return the input vector */
 
@@ -71,13 +72,13 @@ void matvecs_parallel(const int *A_local, const int *x, int *res, long long matr
         for (long long i = 0; i < local_rows; i++) {
             sum = 0;
             for (long long j = 0; j < cols; j++) {
-                sum += A_local[i * cols + j] * res[j];
+                sum += A_local[i * cols + j] * res_full[j];
             }
             x_write[i] = sum;
         }
 
-        /* Gather distributed x_write vector to replicated res vector, ready for next iteration's input or final output */
-        MPI_Allgather(x_write, local_rows, MPI_INT, res, local_rows, MPI_INT, MPI_COMM_WORLD);
+        /* Gather distributed x_write vector to replicated res_full vector, ready for next iteration's input or final output */
+        MPI_Allgather(x_write, local_rows, MPI_INT, res_full, local_rows, MPI_INT, MPI_COMM_WORLD);
         /* implicit barrier */
 
         /* need barrier to synchronize next stage -- we have implicit barrier by MPI_Allgather */

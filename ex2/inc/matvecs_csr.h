@@ -7,11 +7,15 @@
 A is the input matrix. Matrix has to be square.
 x is the input vector. 
 res is the output vector. It should be pre-allocated. 
-SIZE is the number of rows or columns of the matrix, and also the number of elements of the vector and each resultant vector. 
 ITERS is the number of repeated multiplications. If 0, returns the input vector. */
-void matvecs_csr(csr_matrix_t *A_csr, int *x, int *res, int iters);
+void matvecs_csr(const csr_matrix_t *A_csr, const int *x, int *res, int iters);
 
-/* Same as matvecs but in parallel, with THREAD_COUNT threads. */
-void matvecs_csr_parallel(csr_matrix_t *A_csr, int *x, int *res, int iters, int thread_count);
+/* Repeated matrix-vector multiplication in PARALLEL using CSR sparse matrix representation.
+A_local is the local-partial input matrix in CSR form. Matrix has to be square.
+x_full is the full input vector. 
+res_full is the output vector. It should be pre-allocated. 
+MATRIX_ROWS are the rows of the matrix. (Square matrix.)
+ITERS is the number of repeated multiplications. If 0, returns the input vector. */
+void matvecs_csr_parallel(const csr_matrix_t *A_local_csr, const int *x_full, int *res_full, long long matrix_rows, int iters);
 
 #endif
