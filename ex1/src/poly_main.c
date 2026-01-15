@@ -10,9 +10,7 @@
 #include "poly_util.h"
 
 
-void Usage(char* prog_name, int* terminate);
-// void Build_mpi_type_input(long long* deg_p, long long* poly_A_p, MPI_Datatype* input_mpi_t_p);
-// void Bcast_input(int source_rank, long long* deg_p, long long* poly_A_p);
+void Usage(char* prog_name, int* terminate, int degree_input, int num_procs);
 
 int main(int argc, char* argv[]) {
     int comm_sz;                /* Number of processes  */
@@ -42,11 +40,11 @@ int main(int argc, char* argv[]) {
         /* Parse inputs and error check */
         long long deg = 0;
         if (argc < 2) 
-            Usage(argv[0], &terminate);
+            Usage(argv[0], &terminate, -1, comm_sz);
         else {
             deg = strtoll(argv[1], NULL, 10); 
-            if (deg < 1)            Usage(argv[0], &terminate); /* invalid degree value */
-            if ((deg + 1) % comm_sz != 0) Usage(argv[0], &terminate); /* degree value not divisible by number of processes */
+            if (deg < 1)            Usage(argv[0], &terminate, (int) deg, comm_sz); /* invalid degree value */
+            if ((deg + 1) % comm_sz != 0) Usage(argv[0], &terminate,  (int) deg, comm_sz); /* degree value not divisible by number of processes */
         }
         deg_input = (size_t) deg;   /* polynomials have the same degree */
         deg_R = 2 * deg_input;      /* resultant polynomial has double degree */
@@ -254,49 +252,16 @@ int main(int argc, char* argv[]) {
  * Purpose:   Print a message indicating how program should be started
  *            and terminate.
  */
-void Usage(char *prog_name, int *terminate) {
+void Usage(char *prog_name, int *terminate, int degree_input, int num_procs) {
     if (terminate != NULL)
         if (*terminate) return;
     fprintf(stderr, "Usage: %s <degree>\n", prog_name);
-    fprintf(stderr, "   degree: Degree of the polynomials. Must be positive. Degree + 1 must be divisible by the number of processes.\n");
+    fprintf(stderr, "   degree: Degree of the polynomials. Must be positive.\n");
+    fprintf(stderr, "           Degree + 1 must be divisible by the number of processes.\n");
+    fprintf(stderr, "           Degree given: %d\n", degree_input);
+    fprintf(stderr, "           Processes:    %d\n", num_procs);
 
     /* trigger exit */
     if (terminate != NULL) (*terminate)++;
     return;
 } /* Usage */
-
-// /*--------------------------------------------------------------------
-//  * Function:  Build_mpi_type_input
-//  * Purpose:   Create a new derived datatyped for the input to be broadcasted to all processes.
-//  */
-// void Build_mpi_type_input(long long* deg_p, long long* poly_A_p, MPI_Datatype* input_mpi_t_p) {
-//     int array_of_blocklengths[2] = {1, (int) *deg_p + 1};
-//     MPI_Datatype array_of_types[2] = {MPI_LONG_LONG, MPI_LONG_LONG};
-//     MPI_Aint deg_addr, poly_A_addr;
-//     MPI_Aint array_of_displacements[2] = {0};
-
-//     MPI_Get_address(deg_p, &deg_addr);
-//     MPI_Get_address(poly_A_p, &poly_A_addr);
-
-//     array_of_displacements[1] = poly_A_addr - deg_addr;
-
-//     MPI_Type_create_struct(2, array_of_blocklengths, array_of_displacements, array_of_types, input_mpi_t_p);
-//     MPI_Type_commit(input_mpi_t_p);
-
-//     return;
-// } /* Build_mpi_type_input */
-
-// /*--------------------------------------------------------------------
-//  * Function:  Bcast_input
-//  * Purpose:   Broadcast the input to all processes using a derived datatype with a single broadcast.
-//  */
-// void Bcast_input(int source_rank, long long* deg_p, long long* poly_A_p) {
-//     MPI_Datatype input_mpi_t;
-
-//     Build_mpi_type_input(deg_p, poly_A_p, &input_mpi_t);
-//     MPI_Bcast(deg_p, 1, input_mpi_t, source_rank, MPI_COMM_WORLD); /* process 0 broadcasts */
-
-//     MPI_Type_free(&input_mpi_t);
-
-//     return;
-// } /* Bcast_input */
