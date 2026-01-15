@@ -4,3 +4,5 @@ bin/
 
 # ignore hidden source files
 .*.c
+.*.py
+.*.sh
