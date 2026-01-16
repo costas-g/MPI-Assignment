@@ -50,7 +50,7 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 # Input CSV  put your files here in the same folder as this script. #for now we have the openMP  vs  pthread
 OPENMP_CSV   = os.path.join(ROOT, "omp_poly_results_stats.csv")
 MPI_CSV   = os.path.join(ROOT, "mpi_poly_results_stats.csv")   
-# PTHREAD_CSV = os.path.join(ROOT, "pthread_poly_results_stats.csv")
+PTHREAD_CSV = os.path.join(ROOT, "pth_poly_results_stats.csv")
 
 OUT_CSV = os.path.join(runs_root, "speedup_compare.csv")
 
@@ -97,7 +97,7 @@ def plot_speedup_compare(df_all: pd.DataFrame) -> None:
 
         for backend in sorted(gdeg["backend"].unique()):
             gb = gdeg[gdeg["backend"] == backend].sort_values("workers")
-            label_suffix = " (threads)" if backend == "OpenMP" else " (processes)" if backend == "MPI" else ""
+            label_suffix = " (threads)" if backend == "OpenMP" or backend == "Pthreads" else " (processes)" if backend == "MPI" else ""
             ax.plot(gb["workers"].values, gb["speedup"].values, "o--", label=backend + label_suffix)
 
         ax.set_xlabel("Workers")
@@ -119,12 +119,12 @@ def main():
     
     df_openmp =    parse_speedup_csv(OPENMP_CSV, "OpenMP")
     
-    # df_pth    = parse_speedup_csv(PTHREAD_CSV, "pthreads")
+    df_pth    = parse_speedup_csv(PTHREAD_CSV, "Pthreads")
     
     df_mpi = parse_speedup_csv(MPI_CSV, "MPI")
 
-    # df_all = pd.concat([df_openmp, df_pth, df_mpi], ignore_index=True)
-    df_all = pd.concat([df_openmp, df_mpi], ignore_index=True)
+    df_all = pd.concat([df_openmp, df_pth, df_mpi], ignore_index=True)
+    # df_all = pd.concat([df_openmp, df_mpi], ignore_index=True)
     df_all.to_csv(OUT_CSV, index=False)
     print(f"[INFO] Saved combined CSV: {OUT_CSV}")
 
