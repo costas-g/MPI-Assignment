@@ -37,7 +37,7 @@ args = parser.parse_args()
 
 
 # Output paths
-data_root = os.path.join(ROOT, "data")
+data_root = os.path.join(ROOT, "data_samenode")
 os.makedirs(data_root, exist_ok=True)
 
 runs_root = os.path.join(data_root, "runs")
@@ -47,7 +47,7 @@ PLOTS_DIR = os.path.join(data_root, "plots")
 os.makedirs(PLOTS_DIR, exist_ok=True)
 
 # Input CSV  (schange the name if needed)
-STATS_CSV = os.path.join(runs_root, "mpi_poly_results_stats.csv")
+STATS_CSV = os.path.join(runs_root, "mpi_poly_results_stats_samenode.csv")
 
 
 def parse_data_csv(csv_path: str, backend: str) -> pd.DataFrame:

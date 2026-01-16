@@ -7,7 +7,7 @@ import csv
 import argparse
 import subprocess
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -23,62 +23,77 @@ EXE_PATH = os.path.join(BIN_DIR, "main")
 if not os.path.exists(EXE_PATH) and os.path.exists(EXE_PATH + ".exe"):
     EXE_PATH = EXE_PATH + ".exe"
 
-MATRIX_SIZE = [1024, 4096, 8192]
+MATRIX_SIZE = [10**3, 10**4]
+# MATRIX_SIZE = [1024, 4096, 8192]
 
 # IMPORTANT: your main expects sparsity as float in [0,1]
-SPARSITY = [0.01, 0.1, 0.4, 0.8]  # 0.01, 0.06, ..., 0.96
+SPARSITY = [x / 100.0 for x in [0, 25, 50, 75, 90, 95, 99]]  # 0.0, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99
+# SPARSITY = [0.01, 0.1, 0.4, 0.8]  # 0.01, 0.06, ..., 0.96
 
-NUM_MULTS = [1, 5, 10]
-PROCESSES   = [1,2,4,8]
+NUM_MULTS = [1, 5, 10, 20]
+PROCESSES = [1, 2, 4, 8]
 
 DATA_DIR  = os.path.join(ROOT, "data")
-EXEC_DIR  = os.path.join(DATA_DIR, "exec")
+RUNS_DIR  = os.path.join(DATA_DIR, "runs")
 PLOTS_DIR = os.path.join(DATA_DIR, "plots")
 
-os.makedirs(EXEC_DIR, exist_ok=True)
+os.makedirs(RUNS_DIR, exist_ok=True)
 os.makedirs(PLOTS_DIR, exist_ok=True)
 
-MEANS_CSV_PATH = os.path.join(EXEC_DIR, "matrix_results_means.csv")
+MEANS_CSV_PATH = os.path.join(RUNS_DIR, "matrix_results_means.csv")
 
 
 # ---------------- REGEXES  ----------------
-FLOAT_PAT = r"([0-9]+(?:\.[0-9]+)?(?:[eE][-+]?[0-9]+)?)"
-PREFIX = r"^\s*"  
+FLOAT_PAT = r"([0-9]+(?:\.[0-9]+)?)"
+PREFIX = r"^\s*"
 
-# Serial CSR build
+# Serial CSR build headline
 csr_build_serial = re.compile(PREFIX + r"Serial CSR build time \(s\):\s*" + FLOAT_PAT, re.MULTILINE)
 
+# Data send headline (from serial CSR build section)
+data_send_time = re.compile(PREFIX + r"Data send time \(s\):\s*" + FLOAT_PAT, re.MULTILINE)
 
-csr_build_parallel = re.compile(PREFIX + r"build\s*:\s*" + FLOAT_PAT, re.MULTILINE)
-
-# Sparse mult time lines are: "Sparse matrix 1x mult Parallel time (s): ..."
+# Sparse/Dense total times (note: it is "1x", not "1024x1024")
 csr_mult_parallel = re.compile(PREFIX + r"Sparse matrix \d+x mult Parallel time \(s\):\s*" + FLOAT_PAT, re.MULTILINE)
 csr_mult_serial   = re.compile(PREFIX + r"Sparse matrix \d+x mult Serial time \(s\):\s*" + FLOAT_PAT, re.MULTILINE)
 
-# Dense mult time lines are: "Dense matrix 1x mult Parallel time (s): ..."
 dense_mult_parallel = re.compile(PREFIX + r"Dense matrix \d+x mult Parallel time \(s\):\s*" + FLOAT_PAT, re.MULTILINE)
 dense_mult_serial   = re.compile(PREFIX + r"Dense matrix \d+x mult Serial time \(s\):\s*" + FLOAT_PAT, re.MULTILINE)
 
-# Speedups
-dense_csr_speedup_p_regex = re.compile(PREFIX + r"Dense\s*/\s*CSR Speedup in Parallel:\s*" + FLOAT_PAT, re.MULTILINE)
-dense_csr_speedup_s_regex = re.compile(PREFIX + r"Dense\s*/\s*CSR Speedup in Serial:\s*" + FLOAT_PAT, re.MULTILINE)
+# Breakdowns inside sparse PARALLEL section
+parallel_build  = re.compile(PREFIX + r"build\s*:\s*"   + FLOAT_PAT, re.MULTILINE)
+parallel_send   = re.compile(PREFIX + r"send\s*:\s*"    + FLOAT_PAT, re.MULTILINE)
+parallel_malloc = re.compile(PREFIX + r"malloc\s*:\s*"  + FLOAT_PAT, re.MULTILINE)
+parallel_compute= re.compile(PREFIX + r"compute\s*:\s*" + FLOAT_PAT, re.MULTILINE)
 
-dense_speedup_regex = re.compile(PREFIX + r"Dense MV Speedup:\s*" + FLOAT_PAT, re.MULTILINE)
-csr_speedup_regex   = re.compile(PREFIX + r"CSR MV Speedup:\s*" + FLOAT_PAT, re.MULTILINE)
+# Speedups
+dense_csr_speedup_p = re.compile(PREFIX + r"Dense\s*/\s*CSR Speedup in Parallel:\s*" + FLOAT_PAT, re.MULTILINE)
+dense_csr_speedup_s = re.compile(PREFIX + r"Dense\s*/\s*CSR Speedup in Serial:\s*"   + FLOAT_PAT, re.MULTILINE)
+
+dense_speedup = re.compile(PREFIX + r"Dense MV Speedup:\s*" + FLOAT_PAT, re.MULTILINE)
+csr_speedup   = re.compile(PREFIX + r"CSR MV Speedup:\s*"   + FLOAT_PAT, re.MULTILINE)
 
 
 key_fields = [
     "csr_build_serial_s",
-    "csr_build_parallel_s",
+    "data_send_time_s",
+
+    "parallel_build_s",
+    "parallel_send_s",
+    "parallel_malloc_s",
+    "parallel_compute_s",
+
     "dense_mult_serial_s",
     "dense_mult_parallel_s",
     "csr_mult_serial_s",
     "csr_mult_parallel_s",
+
     "dense_csr_speedup_p",
     "dense_csr_speedup_s",
-    "dense_speedup_s", #final speedup what we need 
-    "csr_speedup_s",   # this too is final speedup
+    "dense_speedup_s",
+    "csr_speedup_s",
 ]
+
 
 
 def _last_float(pat: re.Pattern, text: str) -> Optional[float]:
@@ -90,26 +105,31 @@ def _last_float(pat: re.Pattern, text: str) -> Optional[float]:
 
 def parse_output(output: str):
     return {
-        "csr_build_serial_s":   _last_float(csr_build_serial, output),
-        "csr_build_parallel_s": _last_float(csr_build_parallel, output),
+        "csr_build_serial_s": _last_float(csr_build_serial, output),
+        "data_send_time_s":   _last_float(data_send_time, output),
 
-        "dense_mult_serial_s":   _last_float(dense_mult_serial, output),
-        "dense_mult_parallel_s": _last_float(dense_mult_parallel, output),
+        "parallel_build_s":   _last_float(parallel_build, output),
+        "parallel_send_s":    _last_float(parallel_send, output),
+        "parallel_malloc_s":  _last_float(parallel_malloc, output),
+        "parallel_compute_s": _last_float(parallel_compute, output),
 
-        "csr_mult_serial_s":   _last_float(csr_mult_serial, output),
-        "csr_mult_parallel_s": _last_float(csr_mult_parallel, output),
+        "dense_mult_serial_s":    _last_float(dense_mult_serial, output),
+        "dense_mult_parallel_s":  _last_float(dense_mult_parallel, output),
 
-        "dense_csr_speedup_p": _last_float(dense_csr_speedup_p_regex, output),
-        "dense_csr_speedup_s": _last_float(dense_csr_speedup_s_regex, output),
+        "csr_mult_serial_s":      _last_float(csr_mult_serial, output),
+        "csr_mult_parallel_s":    _last_float(csr_mult_parallel, output),
 
-        "dense_speedup_s": _last_float(dense_speedup_regex, output),
-        "csr_speedup_s":   _last_float(csr_speedup_regex, output),
+        "dense_csr_speedup_p":    _last_float(dense_csr_speedup_p, output),
+        "dense_csr_speedup_s":    _last_float(dense_csr_speedup_s, output),
+
+        "dense_speedup_s":        _last_float(dense_speedup, output),
+        "csr_speedup_s":          _last_float(csr_speedup, output),
     }
 
 
-
 def run_once(exe_path: str, N: int, sp: float, k: int, t: int) -> Dict[str, Any]:
-    cmd = ["mpiexec", "-n", str(t), exe_path, str(N), f"{sp:.6f}", str(k)]
+    hostfile = os.path.expanduser("~/machinefile_tests")
+    cmd = ["mpiexec", "-n", str(t), "-f", hostfile, exe_path, str(N), f"{sp:.6f}", str(k)]
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     output = (proc.stdout or "") + "\n" + (proc.stderr or "")
     parsed = parse_output(output)
@@ -121,7 +141,7 @@ def run_once(exe_path: str, N: int, sp: float, k: int, t: int) -> Dict[str, Any]
     }
     
 
-def mean_std(values: List[float]) -> tuple[float, float]:
+def mean_std(values: List[float]) -> Tuple[float, float]:
     arr = np.array(values, dtype=float)
     mean = float(np.mean(arr))
     std = float(np.std(arr, ddof=1)) if len(arr) >= 2 else 0.0
@@ -132,7 +152,7 @@ def run_experiment_means(exe_path: str, N: int, sp: float, k: int, t: int, repea
     """
     Runs repeats; keeps only successful parses for averaging.
     If a run crashes (rc!=0) or missing metrics -> counted as failed.
-    """
+    
     key_fields = [
         "csr_build_serial_s","csr_build_parallel_s",
         "dense_mult_serial_s","dense_mult_parallel_s",
@@ -140,7 +160,7 @@ def run_experiment_means(exe_path: str, N: int, sp: float, k: int, t: int, repea
         "dense_csr_speedup_p","dense_csr_speedup_s",
         "dense_speedup_s","csr_speedup_s",
     ]
-    
+    """
 
     ok = {f: [] for f in key_fields}
     rc_list = []
@@ -153,8 +173,14 @@ def run_experiment_means(exe_path: str, N: int, sp: float, k: int, t: int, repea
         missing = [f for f in key_fields if r.get(f) is None]
         is_fail = (rc != 0) or (len(missing) > 0)
 
-        if is_fail:
-            continue
+        if is_fail and rep == 1:
+            print("\n========== DEBUG RAW OUTPUT ==========")
+            print("CMD:", " ".join(r["cmd"]))
+            print("Return code:", rc)
+            print("Missing fields:", missing)
+            print("\n--- OUTPUT START ---")
+            print(r["output"])
+            print("--- OUTPUT END ---\n")
 
         for f in key_fields:
             ok[f].append(float(r[f]))
@@ -200,7 +226,7 @@ def append_row_csv(path: str, row: Dict[str, Any], fieldnames: List[str]) -> Non
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--repeats", type=int, default=4)
+    ap.add_argument("--repeats", type=int, default=1)
     ap.add_argument("--log-mode", choices=["none","fail","all"], default="none",
                     help="Save logs: none (default), fail, or all.")
     ap.add_argument("--skip-experiments", action="store_true",
@@ -234,12 +260,23 @@ def main():
         for N in MATRIX_SIZE:
             for sp in SPARSITY:
                 for k in NUM_MULTS:
-                    
                     for t in PROCESSES:
                         c += 1
-                        print(f"[INFO] {c}/{total} | N={N} sp={sp:.2f} k={k} t={t}")
 
-                        row = run_experiment_means(EXE_PATH, N, sp, k, t, args.repeats, args.log_mode, run_id)
+                        # Control repeats to reduce test time
+                        if N >= 10**4 and sp < 0.95:
+                            final_repeats = 2 # REDUCED REPEATS
+                            if k >= 10 and t < 4:
+                                final_repeats = 1 # MINIMUM REPEATS
+                        else:
+                            final_repeats = 3 # DEFAULT REPEATS
+                        
+                        if args.repeats > 1:
+                            final_repeats = args.repeats # Repeats hard override by explicit argument
+
+                        print(f"[INFO] {c}/{total} | N={N} sp={sp:.2f} k={k} t={t} (running {final_repeats} times)")
+
+                        row = run_experiment_means(EXE_PATH, N, sp, k, t, final_repeats, args.log_mode, run_id)
 
                         # If it crashed at least once, note it
                         if row["n_ok"] == 0 or row["n_fail"] > 0 or row["rc_last"] != 0:
