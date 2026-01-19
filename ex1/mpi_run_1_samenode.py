@@ -43,6 +43,11 @@ parallel_regex = re.compile(r"^\s*Parallel poly mult time \(s\):\s*([0-9]*\.?[0-
 speedup_regex  = re.compile(r"^\s*Speedup:\s*([0-9]*\.?[0-9]+)\s*$")
 match_regex = re.compile(r"^\s*Results match!\s*$")
 
+send_regex    = re.compile(r"^\s*send\s*:\s*([0-9]*\.?[0-9]+)")
+compute_regex = re.compile(r"^\s*compute\s*:\s*([0-9]*\.?[0-9]+)")
+reduce_regex  = re.compile(r"^\s*reduce\s*:\s*([0-9]*\.?[0-9]+)")
+
+
 
 data_root = os.path.join(ROOT, "data_samenode")
 os.makedirs(data_root, exist_ok=True)
@@ -51,7 +56,7 @@ runs_root = os.path.join(data_root, "runs")
 os.makedirs(runs_root, exist_ok=True)
 
 # FINAL output CSV (stats) adjust name 
-STATS_CSV = os.path.join(runs_root, "mpi_poly_results_stats.csv")
+STATS_CSV = os.path.join(runs_root, "mpi_poly_results_stats_samenode.csv")
 
 
 # ---------- RUNNING THE PROGRAM ----------
@@ -62,8 +67,8 @@ def run_single(degree: int, processes: int):
     Raises RuntimeError if results don't match or times can't be parsed.
     """
 
-    cmd = ["mpiexec", "-n", str(processes), "--hosts", f"linux05:8", EXE_PATH, str(degree)] #comment this line when on linux
-    #cmd = ["mpirun", "-np", str(processes), EXE_PATH, str(degree)] #comment this line when on windows
+    # cmd = ["mpiexec", "-n", str(processes), "--hosts", f"linux05:8", EXE_PATH, str(degree)] #comment this line when on linux
+    cmd = ["mpirun", "-np", str(processes), EXE_PATH, str(degree)] #comment this line when on windows
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
     except subprocess.CalledProcessError as e:
@@ -96,11 +101,18 @@ def run_single(degree: int, processes: int):
 
         if match_regex.search(line):
             results_match = True
+
+        m = send_regex.search(line)
+        if m: send_time = float(m.group(1))
+        
+        m = compute_regex.search(line)
+        if m: compute_time = float(m.group(1))
+        
+        m = reduce_regex.search(line)
+        if m: reduce_time = float(m.group(1))
             
         
-
-
-    if gen_time is None or serial_time is None or parallel_time is None or speedup_time is None:
+    if gen_time is None or serial_time is None or parallel_time is None or speedup_time is None or send_time is None or compute_time is None or reduce_time is None:
         print("\n[ERROR] Could not parse times from output:")
         print(output)
         raise RuntimeError("Failed to parse timing lines")
@@ -110,7 +122,7 @@ def run_single(degree: int, processes: int):
         print("Output:\n", output)
         raise RuntimeError("Results mismatch")
 
-    return gen_time, serial_time, parallel_time, speedup_time
+    return gen_time, serial_time, parallel_time, speedup_time, send_time, compute_time, reduce_time
 
 
 def run_combo_and_stats(degree, processes, repeats):
@@ -122,10 +134,13 @@ def run_combo_and_stats(degree, processes, repeats):
     serial_times = []
     parallel_times = []
     speedup_times =[]
+    send_times = []
+    compute_times = []
+    reduce_times = []
 
     for it in range(repeats):
         try:
-            gen_time, serial_time, parallel_time, speedup_time = run_single(degree, processes)
+            gen_time, serial_time, parallel_time, speedup_time, send_time, compute_time, reduce_time = run_single(degree, processes)
         except RuntimeError as e:
             print("[ERROR]", e)
             continue
@@ -134,6 +149,9 @@ def run_combo_and_stats(degree, processes, repeats):
         serial_times.append(serial_time)
         parallel_times.append(parallel_time)
         speedup_times.append(speedup_time)
+        send_times.append(send_time)
+        compute_times.append(compute_time)
+        reduce_times.append(reduce_time)
 
     # If all repeats failed, skip this combo
     if len(parallel_times) == 0 or len(serial_times) == 0:
@@ -142,6 +160,7 @@ def run_combo_and_stats(degree, processes, repeats):
     gen_mean = float(np.mean(gen_times))
     gen_std  = float(np.std(gen_times, ddof=1)) if len(gen_times) > 1 else 0.0
 
+    serial_min_val = float(np.min(serial_times))
     serial_mean = float(np.mean(serial_times))
     serial_std  = float(np.std(serial_times, ddof=1)) if len(serial_times) > 1 else 0.0
 
@@ -149,7 +168,11 @@ def run_combo_and_stats(degree, processes, repeats):
     parallel_std  = float(np.std(parallel_times, ddof=1)) if len(parallel_times) > 1 else 0.0
     parallel_min  = float(np.min(parallel_times))
     parallel_max  = float(np.max(parallel_times))
-    speedup_mean = float(np.mean(speedup_times))
+    speedup_read_mean = float(np.mean(speedup_times))
+
+    send_mean    = float(np.mean(send_times))
+    compute_mean = float(np.mean(compute_times))
+    reduce_mean  = float(np.mean(reduce_times))
 
     
     return {
@@ -159,6 +182,7 @@ def run_combo_and_stats(degree, processes, repeats):
         "gen_mean": gen_mean,
         "gen_std": gen_std,
 
+        "serial_min": serial_min_val,
         "serial_mean": serial_mean,
         "serial_std": serial_std,
 
@@ -167,7 +191,11 @@ def run_combo_and_stats(degree, processes, repeats):
         "parallel_min": parallel_min,
         "parallel_max": parallel_max,
 
-        "speedup": speedup_mean,
+        "speedup_read_mean": speedup_read_mean,
+
+        "send_time": send_mean,
+        "compute_time": compute_mean,
+        "reduce_time": reduce_mean,
         
         "repeats": len(parallel_times),
     }
@@ -241,6 +269,16 @@ def main():
     run_experiments_write_stats()
 
     stats_df = pd.read_csv(STATS_CSV)
+
+    # Compute speedup_calc for each degree
+    for degree in stats_df['degree'].unique():
+        serial_min_deg = stats_df.loc[stats_df['degree'] == degree, 'serial_min'].min()
+        mask = stats_df['degree'] == degree
+        stats_df.loc[mask, 'speedup_calc'] = serial_min_deg / stats_df.loc[mask, 'parallel_mean']
+
+    # Save updated CSV
+    stats_df.to_csv(STATS_CSV, index=False)
+
     print(f"[INFO] Done. Final stats rows: {len(stats_df)}")
     # TODO: plots/tables using stats_df
 
